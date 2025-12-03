@@ -1,0 +1,34 @@
+#include <zmq.hpp>
+#include <string>
+#include <iostream>
+#include <random>
+
+// Weather update server
+// Binds PUB socket to tcp://*:5566
+// Publishes random weather updates
+int main(){
+  // Added from the original code
+  std::cout << "Publishing updates at weather server " << std::endl;
+  zmq::context_t con(1);
+  zmq::socket_t sock(con, ZMQ_PUB);
+  sock.bind("tcp://*:5556");
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dist_zip(1, 100000);
+  std::uniform_int_distribution<> dist_temp(-80, 135);
+  std::uniform_int_distribution<> dist_hum(10, 60);
+
+  while (true) {
+    int zipcode = dist_zip(gen);
+    int temperature = dist_temp(gen);
+    int relhumidity = dist_hum(gen);
+    std::string sendtext = 
+      std::to_string(zipcode) + " " + 
+      std::to_string(temperature) + " " +
+      std::to_string(relhumidity);
+    zmq::message_t msg(sendtext.size());
+    memcpy(msg.data(), sendtext.data(), sendtext.size());
+    sock.send(msg, zmq::send_flags::none);
+  }
+  return 0;
+}
