@@ -1,0 +1,31 @@
+#include <zmq.hpp>
+#include <string>
+#include <iostream>
+
+// Hello world client in C++
+// Connects REQ socket to tcp://localhost:5555
+// Sends "Hello" to server, expects "World" back
+
+int main(){
+  // Socket to talk to server
+  zmq::context_t con(1);
+  std::cout << "Connecting to hello world server" << std::endl;
+  zmq::socket_t sock(con, ZMQ_REQ);
+  sock.connect("tcp://localhost:5555");
+
+  // Do 10 requests, waiting each time for a response 
+  for (int reqnum = 0; reqnum < 10; reqnum++) {
+    std::cout << "Sending request " << reqnum << std::endl;
+    std::string sendtext = "Hello";
+    zmq::message_t req(sendtext.size());
+    memcpy(req.data(), sendtext.data(), sendtext.size());
+    sock.send(req, zmq::send_flags::none);
+
+    // Get the reply.
+    zmq::message_t rep;
+    sock.recv(rep, zmq::recv_flags::none);
+    std::string remsg(static_cast<char*>(rep.data()), rep.size());
+    std::cout << "Received reply " << reqnum << " [ " << remsg << " ] " << std::endl;
+  }
+return 0;
+}
