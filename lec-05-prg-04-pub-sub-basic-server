@@ -1,0 +1,41 @@
+#include <zmq.hpp>
+#include <string>
+#include <iostream>
+#include <sstream>
+
+// Weather update client
+// Connects SUB socket to tcp://localhost:5556
+// Collects weather updates and finds avg temp in zipcode
+
+int main(int argc, char* argv[]){
+  // Socket to talk to server
+  zmq::context_t con(1);
+  zmq::socket_t sock(con, ZMQ_SUB);
+  std::cout << "Collecting updates from weather server " << std::endl;
+  sock.connect("tcp://localhost:5556");
+
+  // Subscribe to zipcode, default is NYC, 10001
+  std::string zip_filter = (argc > 1) ? argv[1] : std::string("10001");
+  sock.set(zmq::sockopt::subscribe, zip_filter);
+  int total_temp = 0;
+  int update_nbr = 0;
+  
+  // Process 5 updates
+  for (update_nbr = 0; update_nbr < 20; ++update_nbr){
+    zmq::message_t msg;
+    sock.recv(msg, zmq::recv_flags::none);
+    std::string remsg(static_cast<char*>(msg.data()), msg.size());
+    std::istringstream iss(remsg);
+    std::string zipcode;
+    std::string temperatureStr;
+    std::string relhumidityStr;
+    iss >> zipcode >> temperatureStr >> relhumidityStr;
+    int temperature = std::stoi(temperatureStr);
+    total_temp += temperature;
+    std::cout << "Receive temperature for zipcode '" << zip_filter << "' was " << temperature << " F" << std::endl;
+    }
+
+double avg_temp = static_cast<double>(total_temp) / update_nbr;
+std::cout << "Average temperature for zipcode '" << zip_filter << "' was " << avg_temp << " F" << std::endl;
+  return 0;
+}
