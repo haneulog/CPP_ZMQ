@@ -1,0 +1,44 @@
+#include <zmq.hpp>
+#include <string>
+#include <iostream>
+#include <thread>
+#include <chrono>
+
+// ClientTask
+void recvHandler(zmq::socket_t* sock, std::string clientID){
+  while (true){
+    zmq::message_t rep;
+    zmq::pollitem_t items[] = {
+      { static_cast<void*>(*sock), 0, ZMQ_POLLIN, 0 }
+    };
+    zmq::poll(items, 1, 1000);
+    if (items[0].revents & ZMQ_POLLIN){
+      sock->recv(rep, zmq::recv_flags::none);
+      std::string remsg(static_cast<char*>(rep.data()), rep.size());
+      std::cout << clientID << " received: " << remsg << std::endl;
+    }
+  }
+}
+
+// main function
+int main(int argc, char* argv[]){
+  std::string clientID = (argc > 1) ? argv[1] : std::string("client");
+  zmq::context_t con(1);
+  zmq::socket_t sock(con, ZMQ_DEALER);
+  sock.set(zmq::sockopt::routing_id, clientID);
+  sock.connect("tcp://localhost:5570");
+  std::cout << "Client " << clientID << " started" << std::endl;
+  std::thread clientThread(recvHandler, &sock, clientID);
+  clientThread.detach();  
+  int reqs = 0;
+  while (true){
+    ++reqs;
+    std::cout << "Req # " << reqs << " sent " << std::endl;
+    std::string sendtext = "request #" + std::to_string(reqs);
+    zmq::message_t msg(sendtext.size());
+    memcpy(msg.data(), sendtext.data(), sendtext.size());
+    sock.send(msg, zmq::send_flags::none);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+  return 0;
+}
