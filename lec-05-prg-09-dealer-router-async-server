@@ -1,0 +1,55 @@
+#include <zmq.hpp>
+#include <zmq_addon.hpp>
+#include <string>
+#include <iostream>
+#include <thread>
+#include <vector>
+
+// Asynchronous Client/Server Pattern
+
+void serverWorker(zmq::context_t& con, int id){
+  zmq::socket_t worker(con, ZMQ_DEALER);
+  worker.connect("inproc://backend");
+  std::cout << "Worker#" << id << " started" << std::endl;
+
+  while (true){
+    zmq::message_t ident;
+    zmq::message_t msg;
+    worker.recv(ident, zmq::recv_flags::none);
+    worker.recv(msg, zmq::recv_flags::none);
+    std::string remsg(static_cast<char*>(msg.data()), msg.size());
+    std::string reident(static_cast<char*>(ident.data()), ident.size());
+    std:: cout << "Worker#" << id << " received " << remsg << " from " << reident << std::endl;
+    worker.send(ident, zmq::send_flags::sndmore);
+    worker.send(msg, zmq::send_flags::none);
+  }
+}
+
+int main(int argc, char* argv[]){
+  if (argc < 2) {
+    std::cerr << "Usage: " << argv[0] << " num_server" << std::endl;
+    return 1;
+  }
+  int num_server = std::stoi(argv[1]);
+  zmq::context_t con(1);
+  zmq::socket_t frontend(con, ZMQ_ROUTER);
+  frontend.bind("tcp://*:5570");
+  zmq::socket_t backend(con, ZMQ_DEALER);
+  backend.bind("inproc://backend");
+  std::vector<std::thread> workers;
+  for (int i = 0; i < num_server; ++i){
+    workers.emplace_back(serverWorker, std::ref(con), i);
+  }
+  zmq::proxy(frontend, backend);
+  frontend.close();
+  backend.close();
+  con.shutdown();
+  con.close();
+
+  for (auto& w : workers){
+    if (w.joinable()){
+      w.join();
+    }
+  } 
+  return 0;
+}
